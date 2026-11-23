@@ -349,6 +349,8 @@ function parseHunk(lines: string[], i: number): { hunk: Hunk; next: number } {
 interface USection {
   oldPath: string | null;
   newPath: string | null;
+  /** A `---`/`+++` pair named the paths (SPEC.md section 6): `rename from`/`rename to` then do not. */
+  pair: boolean;
   newFile: boolean;
   deletedFile: boolean;
   hunks: Hunk[];
@@ -364,7 +366,7 @@ function parseUnified(lines: string[]): USection[] {
     if (l.startsWith('diff --git ')) {
       const m = DIFF_RE.exec(l);
       if (m === null) throw new Exit2(`error: parse ${i + 1}`);
-      cur = { oldPath: m[1]!, newPath: m[2]!, newFile: false, deletedFile: false, hunks: [] };
+      cur = { oldPath: m[1]!, newPath: m[2]!, pair: false, newFile: false, deletedFile: false, hunks: [] };
       sections.push(cur);
       inHeader = true;
       i++;
@@ -376,8 +378,9 @@ function parseUnified(lines: string[]): USection[] {
       if (cur !== null && inHeader) {
         cur.oldPath = oldP;
         cur.newPath = newP;
+        cur.pair = true;
       } else {
-        cur = { oldPath: oldP, newPath: newP, newFile: false, deletedFile: false, hunks: [] };
+        cur = { oldPath: oldP, newPath: newP, pair: true, newFile: false, deletedFile: false, hunks: [] };
         sections.push(cur);
         inHeader = true;
       }
@@ -393,8 +396,8 @@ function parseUnified(lines: string[]): USection[] {
         i = h.next;
         continue;
       }
-      if (l.startsWith('rename from ')) cur.oldPath = l.slice(12).trim();
-      else if (l.startsWith('rename to ')) cur.newPath = l.slice(10).trim();
+      if (l.startsWith('rename from ') && !cur.pair) cur.oldPath = l.slice(12).trim();
+      else if (l.startsWith('rename to ') && !cur.pair) cur.newPath = l.slice(10).trim();
       else if (l.startsWith('new file mode')) cur.newFile = true;
       else if (l.startsWith('deleted file mode')) cur.deletedFile = true;
       i++;
